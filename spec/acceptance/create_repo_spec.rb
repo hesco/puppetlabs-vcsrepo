@@ -1,73 +1,99 @@
+# frozen_string_literal: true
+
 require 'spec_helper_acceptance'
 
-tmpdir = default.tmpdir('vcsrepo')
-
 describe 'create a repo' do
-  context 'without a source' do
-    it 'creates a blank repo' do
-      pp = <<-EOS
+  context 'with without a source' do
+    pp = <<-MANIFEST
       vcsrepo { "#{tmpdir}/testrepo_blank_repo":
         ensure => present,
         provider => git,
       }
-      EOS
-
+    MANIFEST
+    it 'creates a blank repo' do
       # Run it twice and test for idempotency
-      apply_manifest(pp, :catch_failures => true)
-      apply_manifest(pp, :catch_changes => true)
+      idempotent_apply(pp)
     end
 
     describe file("#{tmpdir}/testrepo_blank_repo/") do
-      it 'should have zero files' do
-        shell("ls -1 #{tmpdir}/testrepo_blank_repo | wc -l") do |r|
-          expect(r.stdout).to match(/^0\n$/)
+      it 'has zero files' do
+        run_shell("ls -1 #{tmpdir}/testrepo_blank_repo | wc -l") do |r|
+          expect(r.stdout).to match(%r{^0\n$})
         end
       end
     end
 
     describe file("#{tmpdir}/testrepo_blank_repo/.git") do
-      it { should be_directory }
+      it { is_expected.to be_directory }
     end
   end
 
-  context 'bare repo' do
-    it 'creates a bare repo' do
-      pp = <<-EOS
+  context 'with no source but revision provided' do
+    pp = <<-MANIFEST
+      vcsrepo { "#{tmpdir}/testrepo_blank_with_revision_repo":
+        ensure   => present,
+        provider => git,
+        revision => 'master'
+      }
+    MANIFEST
+    # Can't remove the above master reference without failing the test
+    it 'does not fail (MODULES-2125)' do
+      # Run it twice and test for idempotency
+      idempotent_apply(pp)
+    end
+  end
+
+  context 'with bare repo' do
+    pp = <<-MANIFEST
       vcsrepo { "#{tmpdir}/testrepo_bare_repo":
         ensure => bare,
         provider => git,
       }
-      EOS
-
+    MANIFEST
+    it 'creates a bare repo' do
       # Run it twice and test for idempotency
-      apply_manifest(pp, :catch_failures => true)
-      apply_manifest(pp, :catch_changes => true)
+      idempotent_apply(pp)
     end
 
     describe file("#{tmpdir}/testrepo_bare_repo/config") do
-      it { should contain 'bare = true' }
+      it { is_expected.to contain 'bare = true' }
     end
 
     describe file("#{tmpdir}/testrepo_bare_repo/.git") do
-      it { should_not be_directory }
+      it { is_expected.not_to be_directory }
     end
   end
 
-  context 'bare repo with a revision' do
-    it 'does not create a bare repo when a revision is defined' do
-      pp = <<-EOS
+  context 'with bare repo with a revision' do
+    pp = <<-MANIFEST
       vcsrepo { "#{tmpdir}/testrepo_bare_repo_rev":
         ensure => bare,
         provider => git,
-        revision => 'master',
+        revision => 'main',
       }
-      EOS
-
-      apply_manifest(pp, :expect_failures => true)
+    MANIFEST
+    it 'does not create a bare repo when a revision is defined' do
+      apply_manifest(pp, expect_failures: true)
     end
 
     describe file("#{tmpdir}/testrepo_bare_repo_rev") do
-      it { should_not be_directory }
+      it { is_expected.not_to be_directory }
+    end
+  end
+
+  context 'with mirror repo' do
+    pp = <<-MANIFEST
+      vcsrepo { "#{tmpdir}/testrepo_mirror_repo":
+        ensure => mirror,
+        provider => git,
+      }
+    MANIFEST
+    it 'does not create a mirror repo' do
+      apply_manifest(pp, expect_failures: true)
+    end
+
+    describe file("#{tmpdir}/testrepo_mirror_repo") do
+      it { is_expected.not_to be_directory }
     end
   end
 end
